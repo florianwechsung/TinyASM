@@ -1,0 +1,8 @@
+build/
+tinyasm.egg-info/
+tinyasm/__pycache__/
+*.pvd
+*.vtu
+*.pvtu
+*.so
+*.pyc
