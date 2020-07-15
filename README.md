@@ -11,7 +11,13 @@ You need a recent firedrake install
     curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
     python3 firedrake-install
 
-Then clone the repo including submodules:
+Then there are two variants:
+
+A) Simply run
+
+    pip install git+https://github.com/florianwechsung/TinyASM
+
+B) clone the repo including submodules:
 
     git clone --recursive git@github.com:florianwechsung/TinyASM.git
 
@@ -19,3 +25,4 @@ and then
     
     cd TinyASM
     pip3 install -e .
+
