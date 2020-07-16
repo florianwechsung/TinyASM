@@ -1,5 +1,8 @@
 # TinyASM
 
+[![<florianwechsung>](https://circleci.com/git/florianwechsung/TinyASM.svg?style=svg)](https://app.circleci.com/pipelines/github/florianwechsung/TinyASM)
+
+
 A simple implementation of PETSc's ASM preconditioner that is focussed on the
 case of small matrices. We avoid the overhead of KSP and PC objects for each
 block and just use the dense inverse.
