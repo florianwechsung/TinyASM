@@ -1,0 +1,11 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: firedrakeproject/firedrake:latest
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - run: . /home/firedrake/firedrake/bin/activate; pip3 install -e .; pytest tests
