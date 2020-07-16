@@ -1,6 +1,6 @@
 # TinyASM
 
-[![<florianwechsung>](https://circleci.com/git/florianwechsung/TinyASM.svg?style=svg)](https://app.circleci.com/pipelines/github/florianwechsung/TinyASM)
+[![<florianwechsung>](https://circleci.com/gh/florianwechsung/TinyASM.svg?style=svg)](https://app.circleci.com/pipelines/github/florianwechsung/TinyASM)
 
 
 A simple implementation of PETSc's ASM preconditioner that is focussed on the
