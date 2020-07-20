@@ -288,10 +288,10 @@ PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
 	PetscScalar *globalb;
 	PetscScalar *globalx;
 
-	ierr = VecGetArray(b, &globalb);CHKERRQ(ierr);
+	ierr = VecGetArrayRead(b, &globalb);CHKERRQ(ierr);
 	ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
 	ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
-	ierr = VecRestoreArray(b, &globalb);CHKERRQ(ierr);
+	ierr = VecRestoreArrayRead(b, &globalb);CHKERRQ(ierr);
 	auto t2 = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
     //cout << "Time for getting the local vectors: " << duration << endl << flush;
