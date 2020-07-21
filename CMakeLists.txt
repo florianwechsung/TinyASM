@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.5)
-set(CMAKE_CXX_COMPILER "mpicxx")
-set(CMAKE_C_COMPILER "mpicc")
 if(DEFINED ENV{MPICXX})
     set(CMAKE_CXX_COMPILER $ENV{MPICXX})
+else()
+    set(CMAKE_CXX_COMPILER "mpicxx")
 endif()
 
 if(DEFINED ENV{MPICC})
     set(CMAKE_CXX_COMPILER $ENV{MPICC})
+else()
+    set(CMAKE_C_COMPILER "mpicc")
 endif()
 
 project(_tinyasm)
