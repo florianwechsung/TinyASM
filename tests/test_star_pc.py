@@ -161,21 +161,12 @@ def test_star_equivalence(problem_type):
     star_solver.solve()
     star_its = star_solver.snes.getLinearSolveIterations()
 
-    try:
-        from tinyasm import _tinyasm as tasm
-        have_tinyasm = True
-    except ImportError:
-        have_tinyasm = False
-
-    if have_tinyasm:
-        star_params["mg_levels_pc_star_backend"] = "tinyasm"
-        u.assign(0)
-        nvproblem = NonlinearVariationalProblem(a, u, bcs=bcs)
-        tinyasm_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=star_params, nullspace=nsp)
-        tinyasm_solver.solve()
-        tinyasm_its = tinyasm_solver.snes.getLinearSolveIterations()
-    else:
-        tinyasm_its = star_its
+    star_params["mg_levels_pc_star_backend"] = "tinyasm"
+    u.assign(0)
+    nvproblem = NonlinearVariationalProblem(a, u, bcs=bcs)
+    tinyasm_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=star_params, nullspace=nsp)
+    tinyasm_solver.solve()
+    tinyasm_its = tinyasm_solver.snes.getLinearSolveIterations()
 
     u.assign(0)
     comp_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=comp_params, nullspace=nsp)

@@ -44,12 +44,6 @@ def backend(request):
 
 
 def test_linesmoother(mesh, S1family, expected, backend):
-    if backend == "tinyasm":
-        try:
-            from tinyasm import _tinyasm as tasm
-        except ImportError:
-            return
-
     nits = []
     for degree in range(2):
         S1 = FiniteElement(S1family, mesh._base_mesh.ufl_cell(), degree+1)
