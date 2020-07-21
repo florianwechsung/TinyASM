@@ -69,49 +69,39 @@ class BlockJacobi {
     ~BlockJacobi() {
         std::cout << "Destructor" << std::endl;
         int numBlocks = dofsPerBlock.size();
-        MatDestroyMatrices(numBlocks, &localmats);
         for(int p=0; p<numBlocks; p++) {
             ISDestroy(&dofis[p]);
         }
         if(localmats)
-            MatDestroyMatrices(numBlocks, &localmats);
+            MatDestroySubMatrices(numBlocks, &localmats);
         PetscSFDestroy(&sf);
     }
 
     PetscInt updateValuesPerBlock(Mat P) {
         PetscInt ierr, dof;
         int numBlocks = dofsPerBlock.size();
-        if(0) {
-            for(int p=0; p<numBlocks; p++) {
-                dof = dofsPerBlock[p].size();
-                for(int i=0; i<dof; i++)
-                    ierr = MatGetValues(P, dof, &dofsPerBlock[p][0], dof, &dofsPerBlock[p][0], &matValuesPerBlock[p][0]);CHKERRQ(ierr);
-            }
-        } else {
-			auto t1 = std::chrono::high_resolution_clock::now();
-			ierr = MatCreateSubMatrices(P, numBlocks, &dofis[0], &dofis[0], localmats ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
-			//ierr = MatCreateSubMatrices(P, numBlocks, &dofis[0], &dofis[0], MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
-            for(int p=0; p<numBlocks; p++) {
-                PetscInt dof = globalDofsPerBlock[p].size();
-                vector<int> v(dof);
-                iota(v.begin(), v.end(), 0);
-                ierr = MatGetValues(localmats[p], dof, &v[0], dof, &v[0], &matValuesPerBlock[p][0]);CHKERRQ(ierr);
-            }
-			//ierr = MatDestroyMatrices(numBlocks, &localmats);CHKERRQ(ierr);
-			auto t2 = std::chrono::high_resolution_clock::now();
-			auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-            //cout << "Time for getting the local matrices: " << duration << endl << flush;
+        //auto t1 = std::chrono::high_resolution_clock::now();
+        ierr = MatCreateSubMatrices(P, numBlocks, &dofis[0], &dofis[0], localmats ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
+        //ierr = MatCreateSubMatrices(P, numBlocks, &dofis[0], &dofis[0], MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
+        for(int p=0; p<numBlocks; p++) {
+            PetscInt dof = globalDofsPerBlock[p].size();
+            vector<int> v(dof);
+            iota(v.begin(), v.end(), 0);
+            ierr = MatGetValues(localmats[p], dof, &v[0], dof, &v[0], &matValuesPerBlock[p][0]);CHKERRQ(ierr);
         }
-		auto t1 = std::chrono::high_resolution_clock::now();
+        //ierr = MatDestroyMatrices(numBlocks, &localmats);CHKERRQ(ierr);
+        //auto t2 = std::chrono::high_resolution_clock::now();
+        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+        //cout << "Time for getting the local matrices: " << duration << endl << flush;
+
+		//t1 = std::chrono::high_resolution_clock::now();
 		PetscInt info;
         for(int p=0; p<numBlocks; p++) {
             PetscInt dof = dofsPerBlock[p].size();
-            //PetscStackCallBLAS("LAPACKgetrf",LAPACKgetrf_(&dof,&dof,&matValuesPerBlock[p][0],&dof,&piv[0],&info));
-            //PetscStackCallBLAS("LAPACKgetri",LAPACKgetri_(&dof,&matValuesPerBlock[p][0], &dof, &piv[0],&fwork[0],&dof,&info));
 			mymatinvert(&dof, &matValuesPerBlock[p][0], &piv[0], &info, &fwork[0]);
         }
-		auto t2 = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+		//t2 = std::chrono::high_resolution_clock::now();
+		//duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
         //cout << "Time for factorising the local matrices: " << duration << endl << flush;
         if(0){
             for(int p=0; p<numBlocks; p++) {
