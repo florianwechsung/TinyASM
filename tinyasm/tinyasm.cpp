@@ -66,6 +66,18 @@ class BlockJacobi {
         matToUse = vector<int>(numBlocks, -1);
     }
 
+    ~BlockJacobi() {
+        std::cout << "Destructor" << std::endl;
+        int numBlocks = dofsPerBlock.size();
+        MatDestroyMatrices(numBlocks, &localmats);
+        for(int p=0; p<numBlocks; p++) {
+            ISDestroy(&dofis[p]);
+        }
+        if(localmats)
+            MatDestroyMatrices(numBlocks, &localmats);
+        PetscSFDestroy(&sf);
+    }
+
     PetscInt updateValuesPerBlock(Mat P) {
         PetscInt ierr, dof;
         int numBlocks = dofsPerBlock.size();
