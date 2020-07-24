@@ -36,7 +36,6 @@ class BlockJacobi {
 	Mat *localmats;
 	vector<IS> dofis;
 	vector<PetscInt> piv;
-	vector<int> matToUse;
 	vector<PetscScalar> fwork;
 
     BlockJacobi(vector<vector<PetscInt>> _dofsPerBlock, vector<vector<PetscInt>> _globalDofsPerBlock, int localSize, PetscSF _sf)
@@ -61,13 +60,11 @@ class BlockJacobi {
 		localmats = NULL;
 		dofis = vector<IS>(numBlocks);
 		for(int p=0; p<numBlocks; p++) {
-			ISCreateGeneral(MPI_COMM_SELF, globalDofsPerBlock[p].size(), &globalDofsPerBlock[p][0], PETSC_USE_POINTER ,&dofis[p]);
+			ISCreateGeneral(MPI_COMM_SELF, globalDofsPerBlock[p].size(), globalDofsPerBlock[p].data(), PETSC_USE_POINTER, dofis.data() + p);
 		}
-        matToUse = vector<int>(numBlocks, -1);
     }
 
     ~BlockJacobi() {
-        std::cout << "Destructor" << std::endl;
         int numBlocks = dofsPerBlock.size();
         for(int p=0; p<numBlocks; p++) {
             ISDestroy(&dofis[p]);
@@ -80,29 +77,18 @@ class BlockJacobi {
     PetscInt updateValuesPerBlock(Mat P) {
         PetscInt ierr, dof;
         int numBlocks = dofsPerBlock.size();
-        //auto t1 = std::chrono::high_resolution_clock::now();
-        ierr = MatCreateSubMatrices(P, numBlocks, &dofis[0], &dofis[0], localmats ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
-        //ierr = MatCreateSubMatrices(P, numBlocks, &dofis[0], &dofis[0], MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
+        ierr = MatCreateSubMatrices(P, numBlocks, dofis.data(), dofis.data(), localmats ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
+        vector<int> v(fwork.size());
+        iota(v.begin(), v.end(), 0);
         for(int p=0; p<numBlocks; p++) {
             PetscInt dof = globalDofsPerBlock[p].size();
-            vector<int> v(dof);
-            iota(v.begin(), v.end(), 0);
-            ierr = MatGetValues(localmats[p], dof, &v[0], dof, &v[0], &matValuesPerBlock[p][0]);CHKERRQ(ierr);
+            ierr = MatGetValues(localmats[p], dof, v.data(), dof, v.data(), matValuesPerBlock[p].data());CHKERRQ(ierr);
         }
-        //ierr = MatDestroyMatrices(numBlocks, &localmats);CHKERRQ(ierr);
-        //auto t2 = std::chrono::high_resolution_clock::now();
-        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-        //cout << "Time for getting the local matrices: " << duration << endl << flush;
-
-		//t1 = std::chrono::high_resolution_clock::now();
 		PetscInt info;
         for(int p=0; p<numBlocks; p++) {
             PetscInt dof = dofsPerBlock[p].size();
-			mymatinvert(&dof, &matValuesPerBlock[p][0], &piv[0], &info, &fwork[0]);
+			mymatinvert(&dof, matValuesPerBlock[p].data(), piv.data(), &info, fwork.data());
         }
-		//t2 = std::chrono::high_resolution_clock::now();
-		//duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-        //cout << "Time for factorising the local matrices: " << duration << endl << flush;
         if(0){
             for(int p=0; p<numBlocks; p++) {
                 cout << "Mat " << p << endl;
@@ -120,36 +106,33 @@ class BlockJacobi {
     }
 
 
-    PetscInt solve(double* b, double* x) {
-		auto t1 = std::chrono::high_resolution_clock::now();
+    PetscInt solve(const double* __restrict b, double* __restrict x) {
         PetscInt dof;
         PetscScalar dOne = 1.0;
         PetscInt one = 1;
         PetscScalar dZero = 0.0;
         for(int p=0; p<dofsPerBlock.size(); p++) {
             dof = dofsPerBlock[p].size();
+            auto dofmap = dofsPerBlock[p];
+            auto matvalues = matValuesPerBlock[p];
             for(int j=0; j<dof; j++)
-                workb[j] = b[dofsPerBlock[p][j]];;
+                workb[j] = b[dofmap[j]];
             if(dof < 6)
                 for(int i=0; i<dof; i++)
                     for(int j=0; j<dof; j++)
-                        x[dofsPerBlock[p][i]] += matValuesPerBlock[p][i*dof + j] * workb[j];
+                        x[dofmap[i]] += matvalues[i*dof + j] * workb[j];
             else {
-                PetscStackCallBLAS("BLASgemv",BLASgemv_("N", &dof, &dof, &dOne, &matValuesPerBlock[p][0], &dof, &workb[0], &one, &dZero, &worka[0], &one));
+                PetscStackCallBLAS("BLASgemv",BLASgemv_("N", &dof, &dof, &dOne, matvalues.data(), &dof, workb.data(), &one, &dZero, worka.data(), &one));
                 for(int i=0; i<dof; i++)
-                    x[dofsPerBlock[p][i]] += worka[i];
+                    x[dofmap[i]] += worka[i];
             }
         }
-		auto t2 = std::chrono::high_resolution_clock::now();
-		auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-        //cout << "Time for applying the local matrices: " << duration << endl << flush;
         return 0;
     }
 };
 
-PetscErrorCode CreateCombinedSF(PC pc, std::vector<PetscSF>& sf, std::vector<PetscInt>& bs, PetscSF *newsf)
+PetscErrorCode CreateCombinedSF(PC pc, const std::vector<PetscSF>& sf, const std::vector<PetscInt>& bs, PetscSF *newsf)
 {
-  //PC_PATCH      *patch = (PC_PATCH *) pc->data;
   PetscInt       i;
   PetscErrorCode ierr;
   auto n = sf.size();
@@ -283,7 +266,6 @@ PetscErrorCode PCSetup_TinyASM(PC pc) {
 
 PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
     PetscInt ierr;
-	auto t1 = std::chrono::high_resolution_clock::now();
 	ierr = VecSet(x, 0.0);CHKERRQ(ierr);
 	auto blockjacobi = (BlockJacobi *)pc->data;
 
@@ -294,22 +276,14 @@ PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
 	ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
 	ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
 	ierr = VecRestoreArrayRead(b, &globalb);CHKERRQ(ierr);
-	auto t2 = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-    //cout << "Time for getting the local vectors: " << duration << endl << flush;
 
-	for(int i=0; i<blockjacobi->localx.size(); i++)
-		blockjacobi->localx[i] = 0.;
+    std::fill(blockjacobi->localx.begin(), blockjacobi->localx.end(), 0);
 
-	blockjacobi->solve(&(blockjacobi->localb[0]), &(blockjacobi->localx[0]));
-	t1 = std::chrono::high_resolution_clock::now();
+	blockjacobi->solve(blockjacobi->localb.data(), blockjacobi->localx.data());
 	ierr = VecGetArray(x, &globalx);CHKERRQ(ierr);
 	ierr = PetscSFReduceBegin(blockjacobi->sf, MPIU_SCALAR, &(blockjacobi->localx[0]), globalx, MPI_SUM);CHKERRQ(ierr);
 	ierr = PetscSFReduceEnd(blockjacobi->sf, MPIU_SCALAR, &(blockjacobi->localx[0]), globalx, MPI_SUM);CHKERRQ(ierr);
 	ierr = VecRestoreArray(x, &globalx);CHKERRQ(ierr);
-	t2 = std::chrono::high_resolution_clock::now();
-	duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
-    //cout << "Time for scattering the local vectors: " << duration << endl << flush;
     return 0;
 }
 
@@ -319,12 +293,32 @@ PetscErrorCode PCDestroy_TinyASM(PC pc) {
     return 0;
 }
 
+PetscErrorCode PCView_TinyASM(PC pc, PetscViewer viewer) {
+    PetscBool isascii;
+    PetscInt ierr;
+    ierr = PetscObjectTypeCompare((PetscObject) viewer, PETSCVIEWERASCII, &isascii);CHKERRQ(ierr);
+    if(pc->data) {
+        auto blockjacobi = (BlockJacobi *)pc->data;
+        PetscInt nblocks = blockjacobi->dofsPerBlock.size();
+        std::vector<PetscInt> blocksizes(nblocks);
+        std::transform(blockjacobi->dofsPerBlock.begin(), blockjacobi->dofsPerBlock.end(), blocksizes.begin(), [](std::vector<PetscInt> &v){ return v.size(); });
+        std::cout << blocksizes[0] << " " << blocksizes[1] << std::endl; 
+        PetscInt biggestblock = *std::max_element(blocksizes.begin(), blocksizes.end());
+        PetscScalar avgblock = std::accumulate(blocksizes.begin(), blocksizes.end(), 0.)/nblocks;
+        ierr = PetscViewerASCIIPushTab(viewer);CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "TinyASM (block Jacobi) preconditioner with %d blocks\n", nblocks);CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "Average block size %f \n", avgblock);CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPrintf(viewer, "Largest block size %d \n", biggestblock);CHKERRQ(ierr);
+        ierr = PetscViewerASCIIPopTab(viewer);CHKERRQ(ierr);
+    }
+}
 
 PetscErrorCode PCCreate_TinyASM(PC pc) {
     pc->data = NULL;
     pc->ops->apply = PCApply_TinyASM;
     pc->ops->setup = PCSetup_TinyASM;
     pc->ops->destroy = PCDestroy_TinyASM;
+    pc->ops->view = PCView_TinyASM;
     return 0;
 }
 // pybind11 casters for PETSc/petsc4py objects, copied from dolfinx repo
