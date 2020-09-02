@@ -7,7 +7,12 @@ def problem_type(request):
     return request.param
 
 
-def test_star_equivalence(problem_type):
+@pytest.fixture(params=["petscasm", "tinyasm"])
+def backend(request):
+    return request.param
+
+
+def test_star_equivalence(problem_type, backend):
     distribution_parameters = {"partition": True,
                                "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)}
 
@@ -129,6 +134,7 @@ def test_star_equivalence(problem_type):
                        "mg_levels_pc_type": "python",
                        "mg_levels_pc_python_type": "firedrake.ASMStarPC",
                        "mg_levels_pc_star_construct_dim": 0,
+                       "mg_levels_pc_star_sub_sub_pc_factor_shift_type": "nonzero",
                        "mg_coarse_pc_type": "python",
                        "mg_coarse_pc_python_type": "firedrake.AssembledPC",
                        "mg_coarse_assembled_pc_type": "lu",
@@ -156,17 +162,11 @@ def test_star_equivalence(problem_type):
                        "mg_coarse_assembled_pc_type": "lu",
                        "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps"}
 
+    star_params["mg_levels_pc_star_backend"] = backend
     nvproblem = NonlinearVariationalProblem(a, u, bcs=bcs)
     star_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=star_params, nullspace=nsp)
     star_solver.solve()
     star_its = star_solver.snes.getLinearSolveIterations()
-
-    star_params["mg_levels_pc_star_backend"] = "tinyasm"
-    u.assign(0)
-    nvproblem = NonlinearVariationalProblem(a, u, bcs=bcs)
-    tinyasm_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=star_params, nullspace=nsp)
-    tinyasm_solver.solve()
-    tinyasm_its = tinyasm_solver.snes.getLinearSolveIterations()
 
     u.assign(0)
     comp_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=comp_params, nullspace=nsp)
@@ -174,4 +174,127 @@ def test_star_equivalence(problem_type):
     comp_its = comp_solver.snes.getLinearSolveIterations()
 
     assert star_its == comp_its
-    assert star_its == tinyasm_its
+
+
+def test_vanka_equivalence(problem_type):
+    distribution_parameters = {"partition": True,
+                               "overlap_type": (DistributedMeshOverlapType.VERTEX, 1)}
+
+    if problem_type == "scalar":
+        base = UnitSquareMesh(10, 10, distribution_parameters=distribution_parameters)
+        mh = MeshHierarchy(base, 2, distribution_parameters=distribution_parameters)
+        mesh = mh[-1]
+        V = FunctionSpace(mesh, "CG", 1)
+
+        u = Function(V)
+        v = TestFunction(V)
+
+        a = inner(grad(u), grad(v))*dx - inner(Constant(1), v)*dx
+        bcs = DirichletBC(V, 0, "on_boundary")
+        nsp = None
+
+        vanka_params = {"mat_type": "aij",
+                        "snes_type": "ksponly",
+                        "ksp_type": "richardson",
+                        "pc_type": "mg",
+                        "pc_mg_type": "multiplicative",
+                        "pc_mg_cycles": "v",
+                        "mg_levels_ksp_type": "richardson",
+                        "mg_levels_ksp_richardson_scale": 1/10,
+                        "mg_levels_ksp_max_it": 1,
+                        "mg_levels_pc_type": "python",
+                        "mg_levels_pc_python_type": "firedrake.ASMVankaPC",
+                        "mg_levels_pc_vanka_construct_codim": 0,
+                        "mg_coarse_pc_type": "python",
+                        "mg_coarse_pc_python_type": "firedrake.AssembledPC",
+                        "mg_coarse_assembled_pc_type": "lu",
+                        "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps"}
+
+        comp_params = {"mat_type": "aij",
+                       "snes_type": "ksponly",
+                       "ksp_type": "richardson",
+                       "pc_type": "mg",
+                       "pc_mg_type": "multiplicative",
+                       "pc_mg_cycles": "v",
+                       "mg_levels_ksp_type": "richardson",
+                       "mg_levels_ksp_richardson_scale": 1/10,
+                       "mg_levels_ksp_max_it": 1,
+                       "mg_levels_pc_type": "python",
+                       "mg_levels_pc_python_type": "firedrake.PatchPC",
+                       "mg_levels_patch_pc_patch_save_operators": True,
+                       "mg_levels_patch_pc_patch_construct_type": "vanka",
+                       "mg_levels_patch_pc_patch_construct_codim": 0,
+                       "mg_levels_patch_pc_patch_sub_mat_type": "seqdense",
+                       "mg_levels_patch_sub_ksp_type": "preonly",
+                       "mg_levels_patch_sub_pc_type": "lu",
+                       "mg_coarse_pc_type": "python",
+                       "mg_coarse_pc_python_type": "firedrake.AssembledPC",
+                       "mg_coarse_assembled_pc_type": "lu",
+                       "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps"}
+
+    elif problem_type == "vector":
+        base = UnitSquareMesh(2, 2, distribution_parameters=distribution_parameters)
+        mh = MeshHierarchy(base, 1, distribution_parameters=distribution_parameters)
+        mesh = mh[-1]
+        V = FunctionSpace(mesh, "RT", 1)
+
+        u = Function(V)
+        v = TestFunction(V)
+
+        (x, y) = SpatialCoordinate(mesh)
+        f = as_vector([x*(1-x), y*(1-y)])
+        a = inner(div(u), div(v))*dx + inner(u, v)*dx - inner(f, v)*dx
+        bcs = DirichletBC(V, 0, "on_boundary")
+        nsp = None
+
+        vanka_params = {"mat_type": "aij",
+                        "snes_type": "ksponly",
+                        "ksp_type": "cg",
+                        "pc_type": "mg",
+                        "pc_mg_type": "full",
+                        "mg_levels_ksp_type": "richardson",
+                        "mg_levels_ksp_richardson_scale": 3/10,
+                        "mg_levels_ksp_max_it": 1,
+                        "mg_levels_pc_type": "python",
+                        "mg_levels_pc_python_type": "firedrake.ASMVankaPC",
+                        "mg_levels_pc_vanka_construct_codim": 0,
+                        "mg_coarse_pc_type": "python",
+                        "mg_coarse_pc_python_type": "firedrake.AssembledPC",
+                        "mg_coarse_assembled_pc_type": "lu",
+                        "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps"}
+
+        comp_params = {"mat_type": "aij",
+                       "snes_type": "ksponly",
+                       "ksp_type": "cg",
+                       "pc_type": "mg",
+                       "pc_mg_type": "full",
+                       "mg_levels_ksp_type": "richardson",
+                       "mg_levels_ksp_richardson_scale": 3/10,
+                       "mg_levels_ksp_max_it": 1,
+                       "mg_levels_pc_type": "python",
+                       "mg_levels_pc_python_type": "firedrake.PatchPC",
+                       "mg_levels_patch_pc_patch_save_operators": True,
+                       "mg_levels_patch_pc_patch_construct_type": "vanka",
+                       "mg_levels_patch_pc_patch_construct_codim": 0,
+                       "mg_levels_patch_pc_patch_sub_mat_type": "seqdense",
+                       "mg_levels_patch_sub_ksp_type": "preonly",
+                       "mg_levels_patch_sub_pc_type": "lu",
+                       "mg_coarse_pc_type": "python",
+                       "mg_coarse_pc_python_type": "firedrake.AssembledPC",
+                       "mg_coarse_assembled_pc_type": "lu",
+                       "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps"}
+
+    elif problem_type == "mixed":
+        return
+
+    nvproblem = NonlinearVariationalProblem(a, u, bcs=bcs)
+    star_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=vanka_params, nullspace=nsp)
+    star_solver.solve()
+    star_its = star_solver.snes.getLinearSolveIterations()
+
+    u.assign(0)
+    comp_solver = NonlinearVariationalSolver(nvproblem, solver_parameters=comp_params, nullspace=nsp)
+    comp_solver.solve()
+    comp_its = comp_solver.snes.getLinearSolveIterations()
+
+    assert star_its == comp_its
