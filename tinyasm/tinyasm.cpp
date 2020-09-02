@@ -310,6 +310,7 @@ PetscErrorCode PCView_TinyASM(PC pc, PetscViewer viewer) {
         ierr = PetscViewerASCIIPrintf(viewer, "Largest block size %d \n", biggestblock);CHKERRQ(ierr);
         ierr = PetscViewerASCIIPopTab(viewer);CHKERRQ(ierr);
     }
+    return 0;
 }
 
 PetscErrorCode PCCreate_TinyASM(PC pc) {
