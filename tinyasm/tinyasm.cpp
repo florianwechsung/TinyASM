@@ -105,7 +105,7 @@ class BlockJacobi {
         }
 
 
-        PetscInt solve(const double* __restrict b, double* __restrict x) {
+        PetscInt solve(const PetscScalar* __restrict b, PetscScalar* __restrict x) {
             PetscInt dof;
             PetscScalar dOne = 1.0;
             PetscInt one = 1;
