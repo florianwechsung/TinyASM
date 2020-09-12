@@ -20,6 +20,8 @@
 using namespace std;
 namespace py = pybind11;
 
+PetscLogEvent PC_tinyasm_SetASMLocalSubdomains, PC_tinyasm_apply, PC_tinyasm_setup;
+
 PetscErrorCode mymatinvert(PetscInt* n, PetscScalar* mat, PetscInt* piv, PetscInt* info, PetscScalar* work);
 
 class BlockJacobi {
@@ -257,14 +259,18 @@ PetscErrorCode CreateCombinedSF(PC pc, const std::vector<PetscSF>& sf, const std
 
 
 PetscErrorCode PCSetup_TinyASM(PC pc) {
+    PetscInt ierr;
+    ierr = PetscLogEventBegin(PC_tinyasm_setup, pc, 0, 0, 0);CHKERRQ(ierr);
     auto P = pc -> pmat;
     auto blockjacobi = (BlockJacobi *)pc->data;
     blockjacobi -> updateValuesPerBlock(P);
+    ierr = PetscLogEventEnd(PC_tinyasm_setup, pc, 0, 0, 0);CHKERRQ(ierr);
     return 0;
 }
 
 PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
     PetscInt ierr;
+    ierr = PetscLogEventBegin(PC_tinyasm_apply, pc, 0, 0, 0);CHKERRQ(ierr);
     ierr = VecSet(x, 0.0);CHKERRQ(ierr);
     auto blockjacobi = (BlockJacobi *)pc->data;
 
@@ -283,6 +289,7 @@ PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
     ierr = PetscSFReduceBegin(blockjacobi->sf, MPIU_SCALAR, &(blockjacobi->localx[0]), globalx, MPI_SUM);CHKERRQ(ierr);
     ierr = PetscSFReduceEnd(blockjacobi->sf, MPIU_SCALAR, &(blockjacobi->localx[0]), globalx, MPI_SUM);CHKERRQ(ierr);
     ierr = VecRestoreArray(x, &globalx);CHKERRQ(ierr);
+    ierr = PetscLogEventEnd(PC_tinyasm_apply, pc, 0, 0, 0);CHKERRQ(ierr);
     return 0;
 }
 
@@ -372,11 +379,12 @@ PYBIND11_MODULE(_tinyasm, m) {
     PCRegister("tinyasm", PCCreate_TinyASM);
     m.def("SetASMLocalSubdomains",
           [](PC pc, std::vector<IS> ises, std::vector<PetscSF> sfs, std::vector<PetscInt> blocksizes, int localsize) {
+              PetscInt ierr, i, p, size, numDofs, blocksize;
+              ierr = PetscLogEventBegin(PC_tinyasm_SetASMLocalSubdomains, pc, 0, 0, 0);CHKERRQ(ierr);
               auto P = pc->pmat;
               ISLocalToGlobalMapping lgr;
               ISLocalToGlobalMapping lgc;
               MatGetLocalToGlobalMapping(P, &lgr, &lgc);
-              PetscInt ierr, i, p, size, numDofs, blocksize;
 
               int numBlocks = ises.size();
               vector<vector<PetscInt>> dofsPerBlock(numBlocks);
@@ -404,6 +412,7 @@ PYBIND11_MODULE(_tinyasm, m) {
               ierr = CreateCombinedSF(pc, sfs, blocksizes, &newsf);CHKERRQ(ierr);
               auto blockjacobi = new BlockJacobi(dofsPerBlock, globalDofsPerBlock, localsize, newsf);
               pc->data = (void*)blockjacobi;
+              ierr = PetscLogEventEnd(PC_tinyasm_SetASMLocalSubdomains, pc, 0, 0, 0);CHKERRQ(ierr);
               return ierr;
           });
 }
