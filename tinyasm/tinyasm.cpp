@@ -377,6 +377,9 @@ namespace pybind11
 
 PYBIND11_MODULE(_tinyasm, m) {
     PCRegister("tinyasm", PCCreate_TinyASM);
+    PetscLogEventRegister("PCTinyASMSetASMLocalSubdomains", PC_CLASSID, &PC_tinyasm_SetASMLocalSubdomains);
+    PetscLogEventRegister("PCTinyASMSetup", PC_CLASSID, &PC_tinyasm_setup);
+    PetscLogEventRegister("PCTinyASMApply", PC_CLASSID, &PC_tinyasm_apply);
     m.def("SetASMLocalSubdomains",
           [](PC pc, std::vector<IS> ises, std::vector<PetscSF> sfs, std::vector<PetscInt> blocksizes, int localsize) {
               PetscInt ierr, i, p, size, numDofs, blocksize;
