@@ -6,7 +6,7 @@ else()
 endif()
 
 if(DEFINED ENV{MPICC})
-    set(CMAKE_CXX_COMPILER $ENV{MPICC})
+    set(CMAKE_C_COMPILER $ENV{MPICC})
 else()
     set(CMAKE_C_COMPILER "mpicc")
 endif()
