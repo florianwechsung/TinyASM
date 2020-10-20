@@ -25,7 +25,7 @@ def test_star_equivalence(problem_type, backend):
         u = Function(V)
         v = TestFunction(V)
 
-        a = inner(grad(u), grad(v))*dx - inner(Constant(1), v)*dx
+        a = inner(u*u, v) * dx + inner(grad(u), grad(v))*dx - inner(Constant(1), v)*dx
         bcs = DirichletBC(V, 0, "on_boundary")
         nsp = None
 
