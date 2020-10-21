@@ -28,7 +28,6 @@ class BlockJacobi {
     public:
         vector<vector<PetscInt>> dofsPerBlock;
         vector<vector<PetscInt>> globalDofsPerBlock;
-        vector<vector<PetscScalar>> matValuesPerBlock;
         vector<PetscScalar> worka;
         vector<PetscScalar> workb;
         vector<PetscScalar> localb;
@@ -44,11 +43,9 @@ class BlockJacobi {
 
                 int numBlocks = dofsPerBlock.size();
                 PetscInt dof;
-                matValuesPerBlock = vector<vector<PetscScalar>>(numBlocks);
                 int biggestBlock = 0;
                 for(int p=0; p<numBlocks; p++) {
                     dof = dofsPerBlock[p].size();
-                    matValuesPerBlock[p] = vector<PetscScalar>(dof * dof);
                     biggestBlock = max(biggestBlock, dof);
                 }
                 worka = vector<PetscScalar>(biggestBlock, 0);
@@ -57,7 +54,7 @@ class BlockJacobi {
                 localx = vector<PetscScalar>(localSize, 0);
                 piv = vector<PetscInt>(biggestBlock, 0.);
                 iota(piv.begin(), piv.end(), 1);
-                fwork= vector<PetscScalar>(biggestBlock, 0.);
+                fwork = vector<PetscScalar>(biggestBlock, 0.);
                 localmats = NULL;
                 dofis = vector<IS>(numBlocks);
                 for(int p=0; p<numBlocks; p++) {
@@ -79,27 +76,29 @@ class BlockJacobi {
             PetscInt ierr, dof;
             int numBlocks = dofsPerBlock.size();
             ierr = MatCreateSubMatrices(P, numBlocks, dofis.data(), dofis.data(), localmats ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
-            vector<int> v(fwork.size());
-            iota(v.begin(), v.end(), 0);
-            for(int p=0; p<numBlocks; p++) {
-                PetscInt dof = globalDofsPerBlock[p].size();
-                ierr = MatGetValues(localmats[p], dof, v.data(), dof, v.data(), matValuesPerBlock[p].data());CHKERRQ(ierr);
-            }
             PetscInt info;
+            PetscScalar *vv;
             for(int p=0; p<numBlocks; p++) {
+                ierr = MatConvert(localmats[p], MATDENSE, MAT_INPLACE_MATRIX,&(localmats[p]));CHKERRQ(ierr);
                 PetscInt dof = dofsPerBlock[p].size();
-                mymatinvert(&dof, matValuesPerBlock[p].data(), piv.data(), &info, fwork.data());
+                ierr = MatDenseGetArrayWrite(localmats[p],&vv);CHKERRQ(ierr);
+                mymatinvert(&dof, vv, piv.data(), &info, fwork.data());
+                ierr = MatDenseRestoreArrayWrite(localmats[p],&vv);CHKERRQ(ierr);
             }
+
             if(0){
+                const PetscScalar *vvv;
                 for(int p=0; p<numBlocks; p++) {
                     cout << "Mat " << p << endl;
                     PetscInt dof = dofsPerBlock[p].size();
+                    ierr = MatDenseGetArrayRead(localmats[p],&vvv);
                     for(int i=0; i<dof; i++){
                         for(int j=0; j<dof; j++){
-                            cout << matValuesPerBlock[p][i*dof+j] << " ";
+                            cout << vvv[i*dof+j] << " ";
                         }
                         cout << endl;
                     }
+                    ierr = MatDenseRestoreArrayRead(localmats[p],&vvv);CHKERRQ(ierr);
                     cout << endl;
                 }
             }
@@ -108,14 +107,16 @@ class BlockJacobi {
 
 
         PetscInt solve(const PetscScalar* __restrict b, PetscScalar* __restrict x) {
-            PetscInt dof;
+            PetscInt dof, ierr;
             PetscScalar dOne = 1.0;
             PetscInt one = 1;
             PetscScalar dZero = 0.0;
+
+            const PetscScalar *matvalues;
             for(int p=0; p<dofsPerBlock.size(); p++) {
                 dof = dofsPerBlock[p].size();
                 auto dofmap = dofsPerBlock[p];
-                auto matvalues = matValuesPerBlock[p];
+                ierr = MatDenseGetArrayRead(localmats[p],&matvalues);CHKERRQ(ierr);
                 for(int j=0; j<dof; j++)
                     workb[j] = b[dofmap[j]];
                 if(dof < 6)
@@ -123,10 +124,11 @@ class BlockJacobi {
                         for(int j=0; j<dof; j++)
                             x[dofmap[i]] += matvalues[i*dof + j] * workb[j];
                 else {
-                    PetscStackCallBLAS("BLASgemv",BLASgemv_("N", &dof, &dof, &dOne, matvalues.data(), &dof, workb.data(), &one, &dZero, worka.data(), &one));
+                    PetscStackCallBLAS("BLASgemv",BLASgemv_("N", &dof, &dof, &dOne, matvalues, &dof, workb.data(), &one, &dZero, worka.data(), &one));
                     for(int i=0; i<dof; i++)
                         x[dofmap[i]] += worka[i];
                 }
+                ierr = MatDenseRestoreArrayRead(localmats[p],&matvalues);CHKERRQ(ierr);
             }
             return 0;
         }
@@ -308,7 +310,6 @@ PetscErrorCode PCView_TinyASM(PC pc, PetscViewer viewer) {
         PetscInt nblocks = blockjacobi->dofsPerBlock.size();
         std::vector<PetscInt> blocksizes(nblocks);
         std::transform(blockjacobi->dofsPerBlock.begin(), blockjacobi->dofsPerBlock.end(), blocksizes.begin(), [](std::vector<PetscInt> &v){ return v.size(); });
-        std::cout << blocksizes[0] << " " << blocksizes[1] << std::endl; 
         PetscInt biggestblock = *std::max_element(blocksizes.begin(), blocksizes.end());
         PetscScalar avgblock = std::accumulate(blocksizes.begin(), blocksizes.end(), 0.)/nblocks;
         ierr = PetscViewerASCIIPushTab(viewer);CHKERRQ(ierr);
