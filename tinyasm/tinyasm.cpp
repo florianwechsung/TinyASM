@@ -89,7 +89,7 @@ class BlockJacobi {
         PetscInt updateValuesPerBlock(Mat P) {
             PetscInt ierr, dof;
             int numBlocks = dofsPerBlock.size();
-            ierr = MatCreateSubMatrices(P, numBlocks, dofis.data(), dofis.data(), localmats_aij ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats_aij);CHKERRQ(ierr);
+            ierr = MatCreateSubMatrices(P, numBlocks, dofis.data(), dofis.data(), MAT_INITIAL_MATRIX, &localmats_aij);CHKERRQ(ierr);
             PetscInt info;
             PetscScalar *vv;
             for(int p=0; p<numBlocks; p++) {
@@ -99,6 +99,8 @@ class BlockJacobi {
                 mymatinvert(&dof, vv, piv.data(), &info, fwork.data());
                 ierr = MatDenseRestoreArrayWrite(localmats[p],&vv);CHKERRQ(ierr);
             }
+	    ierr = MatDestroySubMatrices(numBlocks, &localmats_aij);CHKERRQ(ierr);
+            localmats_aij = NULL;
 
             if(0){
                 const PetscScalar *vvv;
