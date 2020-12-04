@@ -81,7 +81,7 @@ class BlockJacobi {
             for(int p=0; p<numBlocks; p++) {
                 dof = dofsPerBlock[p].size();
                 for(int i=0; i<dof; i++)
-                    ierr = MatGetValues(P, dof, &dofsPerBlock[p][0], dof, &dofsPerBlock[p][0], &matValuesPerBlock[p][0]);CHKERRQ(ierr);
+                    ierr = MatGetValues(P, dof, &globalDofsPerBlock[p][0], dof, &globalDofsPerBlock[p][0], &matValuesPerBlock[p][0]);CHKERRQ(ierr);
             }
             //ierr = MatCreateSubMatrices(P, numBlocks, dofis.data(), dofis.data(), localmats ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
             //vector<int> v(fwork.size());
