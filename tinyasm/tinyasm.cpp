@@ -233,8 +233,13 @@ PetscErrorCode CreateCombinedSF(PC pc, const std::vector<PetscSF>& sf, const std
         ierr = MPI_Type_contiguous(n, MPIU_INT, &contig);CHKERRQ(ierr);
         ierr = MPI_Type_commit(&contig);CHKERRQ(ierr);
 
+#if PETSC_VERSION_LT(3, 15, 0)
         ierr = PetscSFBcastBegin(rankSF, contig, offsets, remoteOffsets);CHKERRQ(ierr);
         ierr = PetscSFBcastEnd(rankSF, contig, offsets, remoteOffsets);CHKERRQ(ierr);
+#else
+        ierr = PetscSFBcastBegin(rankSF, contig, offsets, remoteOffsets, MPI_REPLACE);CHKERRQ(ierr);
+        ierr = PetscSFBcastEnd(rankSF, contig, offsets, remoteOffsets, MPI_REPLACE);CHKERRQ(ierr);
+#endif
         ierr = MPI_Type_free(&contig);CHKERRQ(ierr);
         ierr = PetscFree(offsets);CHKERRQ(ierr);
         ierr = PetscSFDestroy(&rankSF);CHKERRQ(ierr);
@@ -294,8 +299,13 @@ PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
     PetscScalar *globalx;
 
     ierr = VecGetArrayRead(b, &globalb);CHKERRQ(ierr);
+#if PETSC_VERSION_LT(3, 15, 0)
     ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
     ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
+#else
+    ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]), MPI_REPLACE);CHKERRQ(ierr);
+    ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]), MPI_REPLACE);CHKERRQ(ierr);
+#endif
     ierr = VecRestoreArrayRead(b, &globalb);CHKERRQ(ierr);
 
     std::fill(blockjacobi->localx.begin(), blockjacobi->localx.end(), 0);
