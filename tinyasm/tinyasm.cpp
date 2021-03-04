@@ -33,7 +33,9 @@ class BlockJacobi {
         vector<PetscScalar> localb;
         vector<PetscScalar> localx;
         PetscSF sf;
+        Mat *localmats_aij;
         Mat *localmats;
+
         vector<IS> dofis;
         vector<PetscInt> piv;
         vector<PetscScalar> fwork;
@@ -55,9 +57,12 @@ class BlockJacobi {
                 piv = vector<PetscInt>(biggestBlock, 0.);
                 iota(piv.begin(), piv.end(), 1);
                 fwork = vector<PetscScalar>(biggestBlock, 0.);
-                localmats = NULL;
+                localmats_aij = NULL;
                 dofis = vector<IS>(numBlocks);
+                auto ierr = PetscMalloc1(numBlocks, &localmats);CHKERRV(ierr);
                 for(int p=0; p<numBlocks; p++) {
+                    auto ndof = dofsPerBlock[p].size();
+                    localmats[p] = NULL;
                     ISCreateGeneral(MPI_COMM_SELF, globalDofsPerBlock[p].size(), globalDofsPerBlock[p].data(), PETSC_USE_POINTER, dofis.data() + p);
                 }
             }
@@ -67,19 +72,28 @@ class BlockJacobi {
             for(int p=0; p<numBlocks; p++) {
                 ISDestroy(&dofis[p]);
             }
-            if(localmats)
-                MatDestroySubMatrices(numBlocks, &localmats);
+            if(localmats_aij) {
+                PetscErrorCode ierr;
+                ierr = MatDestroySubMatrices(numBlocks, &localmats_aij);CHKERRV(ierr);
+            }
+            if (localmats) {
+                PetscErrorCode ierr;
+                for (int p=0; p<numBlocks; p++) {
+                    ierr = MatDestroy(&localmats[p]);CHKERRV(ierr);
+                }
+                ierr = PetscFree(localmats);CHKERRV(ierr);
+            }
             PetscSFDestroy(&sf);
         }
 
         PetscInt updateValuesPerBlock(Mat P) {
             PetscInt ierr, dof;
             int numBlocks = dofsPerBlock.size();
-            ierr = MatCreateSubMatrices(P, numBlocks, dofis.data(), dofis.data(), localmats ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats);CHKERRQ(ierr);
+            ierr = MatCreateSubMatrices(P, numBlocks, dofis.data(), dofis.data(), localmats_aij ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX, &localmats_aij);CHKERRQ(ierr);
             PetscInt info;
             PetscScalar *vv;
             for(int p=0; p<numBlocks; p++) {
-                ierr = MatConvert(localmats[p], MATDENSE, MAT_INPLACE_MATRIX,&(localmats[p]));CHKERRQ(ierr);
+                ierr = MatConvert(localmats_aij[p], MATDENSE, localmats[p] ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX,&localmats[p]);CHKERRQ(ierr);
                 PetscInt dof = dofsPerBlock[p].size();
                 ierr = MatDenseGetArrayWrite(localmats[p],&vv);CHKERRQ(ierr);
                 mymatinvert(&dof, vv, piv.data(), &info, fwork.data());
@@ -91,7 +105,7 @@ class BlockJacobi {
                 for(int p=0; p<numBlocks; p++) {
                     cout << "Mat " << p << endl;
                     PetscInt dof = dofsPerBlock[p].size();
-                    ierr = MatDenseGetArrayRead(localmats[p],&vvv);
+                    ierr = MatDenseGetArrayRead(localmats[p],&vvv);CHKERRQ(ierr);
                     for(int i=0; i<dof; i++){
                         for(int j=0; j<dof; j++){
                             cout << vvv[i*dof+j] << " ";
@@ -219,8 +233,13 @@ PetscErrorCode CreateCombinedSF(PC pc, const std::vector<PetscSF>& sf, const std
         ierr = MPI_Type_contiguous(n, MPIU_INT, &contig);CHKERRQ(ierr);
         ierr = MPI_Type_commit(&contig);CHKERRQ(ierr);
 
+#if PETSC_VERSION_LT(3, 15, 0)
         ierr = PetscSFBcastBegin(rankSF, contig, offsets, remoteOffsets);CHKERRQ(ierr);
         ierr = PetscSFBcastEnd(rankSF, contig, offsets, remoteOffsets);CHKERRQ(ierr);
+#else
+        ierr = PetscSFBcastBegin(rankSF, contig, offsets, remoteOffsets, MPI_REPLACE);CHKERRQ(ierr);
+        ierr = PetscSFBcastEnd(rankSF, contig, offsets, remoteOffsets, MPI_REPLACE);CHKERRQ(ierr);
+#endif
         ierr = MPI_Type_free(&contig);CHKERRQ(ierr);
         ierr = PetscFree(offsets);CHKERRQ(ierr);
         ierr = PetscSFDestroy(&rankSF);CHKERRQ(ierr);
@@ -280,8 +299,13 @@ PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
     PetscScalar *globalx;
 
     ierr = VecGetArrayRead(b, &globalb);CHKERRQ(ierr);
+#if PETSC_VERSION_LT(3, 15, 0)
     ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
     ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
+#else
+    ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]), MPI_REPLACE);CHKERRQ(ierr);
+    ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]), MPI_REPLACE);CHKERRQ(ierr);
+#endif
     ierr = VecRestoreArrayRead(b, &globalb);CHKERRQ(ierr);
 
     std::fill(blockjacobi->localx.begin(), blockjacobi->localx.end(), 0);

@@ -6,3 +6,5 @@ tinyasm/__pycache__/
 *.pvtu
 *.so
 *.pyc
+/.clangd/
+/compile_commands.json
