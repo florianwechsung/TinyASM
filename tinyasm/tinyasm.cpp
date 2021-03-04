@@ -305,7 +305,7 @@ PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
     PetscScalar *globalx;
 
     ierr = VecGetArrayRead(b, &globalb);CHKERRQ(ierr);
-#if MY_PETSC_VERSION_LT(3, 15, 0)
+#if MY_PETSC_VERSION_LT(3, 14, 4)
     ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
     ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
 #else
