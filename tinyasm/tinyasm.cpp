@@ -16,12 +16,6 @@
 #include <pybind11/stl.h>
 
 
-#define MY_PETSC_VERSION_LT(MAJOR,MINOR,SUBMINOR)       \
-  (PETSC_VERSION_MAJOR < (MAJOR) ||                     \
-   (PETSC_VERSION_MAJOR == (MAJOR) &&                   \
-    (PETSC_VERSION_MINOR < (MINOR) ||                   \
-     (PETSC_VERSION_MINOR == (MINOR) &&                 \
-      (PETSC_VERSION_SUBMINOR < (SUBMINOR))))))
 
 using namespace std;
 namespace py = pybind11;
@@ -239,7 +233,7 @@ PetscErrorCode CreateCombinedSF(PC pc, const std::vector<PetscSF>& sf, const std
         ierr = MPI_Type_contiguous(n, MPIU_INT, &contig);CHKERRQ(ierr);
         ierr = MPI_Type_commit(&contig);CHKERRQ(ierr);
 
-#if MY_PETSC_VERSION_LT(3, 14, 4)
+#if PETSC_VERSION_LT(3, 15, 0)
         ierr = PetscSFBcastBegin(rankSF, contig, offsets, remoteOffsets);CHKERRQ(ierr);
         ierr = PetscSFBcastEnd(rankSF, contig, offsets, remoteOffsets);CHKERRQ(ierr);
 #else
@@ -305,7 +299,7 @@ PetscErrorCode PCApply_TinyASM(PC pc, Vec b, Vec x) {
     PetscScalar *globalx;
 
     ierr = VecGetArrayRead(b, &globalb);CHKERRQ(ierr);
-#if MY_PETSC_VERSION_LT(3, 15, 0)
+#if PETSC_VERSION_LT(3, 15, 0)
     ierr = PetscSFBcastBegin(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
     ierr = PetscSFBcastEnd(blockjacobi->sf, MPIU_SCALAR, globalb, &(blockjacobi->localb[0]));CHKERRQ(ierr);
 #else
