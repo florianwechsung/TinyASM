@@ -1,6 +1,8 @@
 import pytest
 from firedrake import *
+from firedrake.petsc import PETSc
 
+PETSc.Sys.pushErrorHandler("mpiabort")
 
 @pytest.fixture(params=["scalar", "vector", "mixed"])
 def problem_type(request):
@@ -30,7 +32,7 @@ def test_star_equivalence(problem_type, backend):
         nsp = None
 
         star_params = {"mat_type": "aij",
-                       "snes_type": "ksponly",
+                       "snes_type": "newtonls",
                        "ksp_type": "richardson",
                        "pc_type": "mg",
                        "pc_mg_type": "multiplicative",
@@ -43,7 +45,7 @@ def test_star_equivalence(problem_type, backend):
                        "mg_levels_pc_star_construct_dim": 0}
 
         comp_params = {"mat_type": "aij",
-                       "snes_type": "ksponly",
+                       "snes_type": "newtonls",
                        "ksp_type": "richardson",
                        "pc_type": "mg",
                        "pc_mg_type": "multiplicative",
