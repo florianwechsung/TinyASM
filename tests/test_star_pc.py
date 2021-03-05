@@ -140,7 +140,9 @@ def test_star_equivalence(problem_type, backend):
                        "mg_coarse_pc_type": "python",
                        "mg_coarse_pc_python_type": "firedrake.AssembledPC",
                        "mg_coarse_assembled_pc_type": "lu",
-                       "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps"}
+                       "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps",
+                       "mg_coarse_assembled_mat_mumps_icntl_24": 1,
+                       "mg_coarse_assembled_mat_mumps_icntl_7": 1}
 
         comp_params = {"mat_type": "aij",
                        "snes_type": "ksponly",
@@ -162,7 +164,9 @@ def test_star_equivalence(problem_type, backend):
                        "mg_coarse_pc_type": "python",
                        "mg_coarse_pc_python_type": "firedrake.AssembledPC",
                        "mg_coarse_assembled_pc_type": "lu",
-                       "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps"}
+                       "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps",
+                       "mg_coarse_assembled_mat_mumps_icntl_24": 1,
+                       "mg_coarse_assembled_mat_mumps_icntl_7": 1}
 
     star_params["mg_levels_pc_star_backend"] = backend
     nvproblem = NonlinearVariationalProblem(a, u, bcs=bcs)
