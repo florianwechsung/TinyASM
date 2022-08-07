@@ -144,7 +144,7 @@ class BlockJacobi {
                         for(int j=0; j<dof; j++)
                             x[dofmap[i]] += matvalues[i*dof + j] * workb[j];
                 else {
-                    PetscStackCallBLAS("BLASgemv",BLASgemv_("N", &dof, &dof, &dOne, matvalues, &dof, workb.data(), &one, &dZero, worka.data(), &one));
+                    PetscCallBLAS("BLASgemv",BLASgemv_("N", &dof, &dof, &dOne, matvalues, &dof, workb.data(), &one, &dZero, worka.data(), &one));
                     for(int i=0; i<dof; i++)
                         x[dofmap[i]] += worka[i];
                 }
