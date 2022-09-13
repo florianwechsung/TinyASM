@@ -16,8 +16,8 @@ PetscErrorCode mymatinvert(PetscInt* n, PetscScalar* mat, PetscInt* piv, PetscIn
 	//LAPACKE_mkl_dgetrfnpi(LAPACK_COL_MAJOR,*n,*n,*n,mat,*n);
 	//LAPACKE_dgetrf(LAPACK_COL_MAJOR,*n,*n,mat,*n, piv);
     //LAPACKE_dgetri(LAPACK_COL_MAJOR, *n,mat, *n, piv);
-    PetscCallBLAS("LAPACKgetrf",LAPACKgetrf_(n,n,mat,n,piv,info));
-    PetscCallBLAS("LAPACKgetri",LAPACKgetri_(n,mat, n, piv,work,n,info));
+    PetscStackCallBLAS("LAPACKgetrf",LAPACKgetrf_(n,n,mat,n,piv,info));
+    PetscStackCallBLAS("LAPACKgetri",LAPACKgetri_(n,mat, n, piv,work,n,info));
 	return 0;
 }
 
