@@ -102,7 +102,7 @@ class BlockJacobi {
                 ierr = MatConvert(localmats_aij[p], MATDENSE, localmats[p] ? MAT_REUSE_MATRIX : MAT_INITIAL_MATRIX,&localmats[p]);CHKERRQ(ierr);
                 PetscInt dof = dofsPerBlock[p].size();
                 ierr = MatDenseGetArrayWrite(localmats[p],&vv);CHKERRQ(ierr);
-                mymatinvert(&dof, vv, piv.data(), &info, fwork.data());
+                if (dof) mymatinvert(&dof, vv, piv.data(), &info, fwork.data());
                 ierr = MatDenseRestoreArrayWrite(localmats[p],&vv);CHKERRQ(ierr);
             }
 
